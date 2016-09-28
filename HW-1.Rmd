@@ -1,6 +1,6 @@
 ---
 title: "MATH 216 Homework 1"
-author: "WRITE YOUR NAME HERE"
+author: "Emily Goins"
 output:
   html_document:
     toc: true
@@ -9,11 +9,12 @@ output:
     smooth_scroll: false
 ---
 
-```{r, echo=FALSE, message=FALSE, cache=TRUE}
+```{r, echo=FALSE, message=FALSE}
 library(ggplot2)
 library(dplyr)
 # For read_csv() command, which is an improved version of base R's read.csv()
 library(readr) 
+library(tidyr)
 
 # Load data sets. Note this assumes this .Rmd files is in the same directory as
 # the .csv files.
@@ -29,15 +30,14 @@ states <- read_csv("data/states.csv")
 
 
 
-
 ## Admistrative:
 
 Please indicate
 
-* Who you collaborated with:
-* Roughly how much time you spent on this HW so far:
+* Who you collaborated with: Alden Cowap
+* Roughly how much time you spent on this HW so far: 3 hours
 * The URL of the RPubs published URL [here](https://www.nhl.com/).
-* What gave you the most trouble:
+* What gave you the most trouble: Getting used to syntax, figuring out how to use the spread function
 * Any comments you have:
 
 
@@ -57,10 +57,60 @@ minutes tend to occur.
 
 ```{r, echo=FALSE, message=FALSE, fig.width=12, fig.height=6}
 
+#percent of flights that were delayed on each date
+total <- flights %>%
+  tally() %>% 
+  rename(total_num = n)
+total
+
+delay <- flights %>% 
+  filter(dep_delay > 30) %>% 
+  tally() %>% 
+  rename(num_delay = n)
+delay
+
+delayedFlights <- flights %>% 
+  mutate(delayed = ifelse(dep_delay > 30, "yes", "no")) %>%
+  filter(!is.na(delayed)) %>%
+  group_by(date, delayed) %>%
+  tally()
+delayedFlights
+
+spreadFlights <- delayedFlights %>% 
+  spread(delayed, n) %>%
+  mutate(fraction = yes/(yes + no))
+spreadFlights
+
+ggplot(data = spreadFlights, aes(x = date, y = fraction)) + geom_line()
+
+#seasonal delays
+  
+delayedFlights <- flights %>% 
+  mutate(delayed = ifelse(dep_delay > 30, "yes", "no")) %>%
+  filter(!is.na(delayed)) %>%
+  group_by(date, delayed) %>%
+  tally()
+delayedFlights
+
+spreadFlights <- delayedFlights %>% 
+  spread(delayed, n) %>%
+  mutate(fraction = yes/(yes + no))
+spreadFlights
+
+spreadFlights <- spreadFlights %>%
+  mutate(month = format(date, "%m")) %>%
+  mutate(season = ifelse(month == "12" | month == "01"| month == "02", "winter", ifelse(month == "03" | month == "04" | month == "05", "spring", ifelse(month == "06" | month == "07" | month == "08", "summer", ifelse(month == "09" | month == "10" | month == "11", "fall", "other")))))
+spreadFlights
+
+
+ggplot(data = spreadFlights, aes(x = date, y = fraction, col = season)) + geom_line()
+
 ```
 
 
 
+mutate(prop = num_delay/total_num) 
+ggplot(data=flights, aes(x=date, y=prop)) + geom_point()
 
 
 ## Question 2:
@@ -70,9 +120,20 @@ they tend to have more room.  Which airlines should these people favor?
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
 
+#I took an "old airplane" to mean that the year it was built was prior to 2000, as the average age of airplanes flown in the U.S. today is around 11 years old (http://www.cnn.com/2010/TRAVEL/02/01/planes.age.dreamliner/). 
+airlinePlanes <- left_join(planes, flights, by = "plane") %>%
+  select(plane, year, carrier) %>%
+  mutate(old = ifelse(year < 2000, "yes", "no")) %>%
+  group_by(carrier, old) %>%
+  filter(!is.na(old)) %>%
+  tally() %>%
+  spread(old, n) %>%
+  mutate(fraction = yes/(yes + no))
+airlinePlanes
+#Graph shows fraction of planes flown by each airline that were built prior to 2000. It seems that American Airlines would be the preferred airline carrier for these people.
+ggplot(data = airlinePlanes, aes(x = carrier, y = fraction)) + geom_point()
+
 ```
-
-
 
 
 
@@ -85,6 +146,40 @@ For example, Southwest Airlines Flight 60 to Dallas consists of a single flight
 path, but since it flew 299 times in 2013, it would be counted as 299 flights.
 
 ```{r, echo=FALSE, message=FALSE, fig.width=12, fig.height=6}
+stateRegion <- right_join(airports, states, by = "state") %>%
+  select(iata, state) 
+stateRegion
+
+#flight paths
+WNflightPath <- flights %>%
+  filter(carrier == "WN") %>%
+  group_by(flight, dest) %>%
+  tally() %>%
+  arrange(desc(n)) 
+WNflightPath
+
+flightPathStates <- left_join(WNflightPath, stateRegion, by = c("dest" = "iata")) %>%
+  group_by(state) %>%
+  tally() %>%
+  rename("freq" = nn) 
+flightPathStates
+
+#shows the number of flightpaths to each state
+ggplot(data = flightPathStates, aes(x = state, y = freq)) + geom_point()
+
+#number of flights
+WNflight <- flights %>%
+  filter(carrier == "WN") %>%
+  select(flight, dest) 
+WNflight
+
+flightStates <- left_join(WNflight, stateRegion, by = c("dest" = "iata")) %>%
+  group_by(state) %>%
+  filter(!is.na(state))
+flightStates
+
+ggplot(data = flightStates, aes(x = state)) + geom_bar()
+
 
 ```
 
@@ -100,4 +195,29 @@ function from the `lubridate` package.
 
 ```{r, echo=FALSE, message=FALSE, fig.width=12, fig.height=6}
 
+HoustonFlights <- flights %>%
+  mutate(month = format(date, "%m")) %>%
+  filter (month == "07") %>%
+  group_by(dest) %>%
+  tally() %>%
+  rename(flight_freq = n)
+HoustonFlights
+
+stateRegion <- right_join(airports, states, by = "state")
+stateRegion
+
+airportRegion <- right_join(stateRegion, HoustonFlights, by = c("iata" = "dest")) %>%
+  group_by(region) %>%
+  summarise(flight_freq = sum(flight_freq)) %>%
+  filter(!is.na(region)) %>%
+  mutate(fraction = flight_freq/sum(airportRegion$flight_freq))
+airportRegion
+
+bar <- ggplot(data = airportRegion, aes(x ="", y = fraction, fill = region)) + geom_bar(stat = "identity")
+bar
+
+pie <- bar + coord_polar("y", start=0)
+pie
 ```
+
+
