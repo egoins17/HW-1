@@ -2,7 +2,7 @@
 title: "MATH 216 Homework 1"
 author: "Emily Goins"
 output:
-  html_document:
+  html_document: http://rpubs.com/egoins/HW1PreSubmission
     toc: true
     toc_float: true
     collapsed: false
@@ -206,11 +206,12 @@ HoustonFlights
 stateRegion <- right_join(airports, states, by = "state")
 stateRegion
 
-airportRegion <- right_join(stateRegion, HoustonFlights, by = c("iata" = "dest")) %>%
+airportRegion <- right_join(stateRegion, HoustonFlights,
+                            by = c("iata" = "dest")) %>%
   group_by(region) %>%
   summarise(flight_freq = sum(flight_freq)) %>%
   filter(!is.na(region)) %>%
-  mutate(fraction = flight_freq/sum(airportRegion$flight_freq))
+  mutate(fraction = flight_freq/sum(flight_freq))
 airportRegion
 
 bar <- ggplot(data = airportRegion, aes(x ="", y = fraction, fill = region)) + geom_bar(stat = "identity")
