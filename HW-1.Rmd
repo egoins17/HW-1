@@ -2,7 +2,7 @@
 title: "MATH 216 Homework 1"
 author: "Emily Goins"
 output:
-  html_document: http://rpubs.com/egoins/HW1PreSubmission
+  html_document: 
     toc: true
     toc_float: true
     collapsed: false
@@ -15,6 +15,7 @@ library(dplyr)
 # For read_csv() command, which is an improved version of base R's read.csv()
 library(readr) 
 library(tidyr)
+library(lubridate)
 
 # Load data sets. Note this assumes this .Rmd files is in the same directory as
 # the .csv files.
@@ -35,9 +36,9 @@ states <- read_csv("data/states.csv")
 Please indicate
 
 * Who you collaborated with: Alden Cowap
-* Roughly how much time you spent on this HW so far: 3 hours
-* The URL of the RPubs published URL [here](https://www.nhl.com/).
-* What gave you the most trouble: Getting used to syntax, figuring out how to use the spread function
+* Roughly how much time you spent on this HW so far: 9 hours
+* The URL of the RPubs published URL [http://rpubs.com/egoins/HW1PreSubmission](https://www.nhl.com/).
+* What gave you the most trouble: 
 * Any comments you have:
 
 
@@ -55,62 +56,44 @@ Using this plot, indicate describe the
 [seasonality](https://en.wikipedia.org/wiki/Seasonality) of when delays over 30
 minutes tend to occur.
 
+The proportion of flights delayed out of Houston, TX seem to be pretty equal throughout the year, but experience a small increase in in the summer months, particularly in July. Summer weather conditions may lead to this trend. 
+
+Corrections: I changed the graph to be a point graph with a smoother to show trendlines, which I believe shows seasonality more accurately. I could not figure out how to disconnect the purple line properly, so there is not a trendline for Dec 2011-Jan 2012 data. 
+
 ```{r, echo=FALSE, message=FALSE, fig.width=12, fig.height=6}
 
 #percent of flights that were delayed on each date
-total <- flights %>%
-  tally() %>% 
-  rename(total_num = n)
-total
+flights %>% 
+  filter(!is.na(dep_delay)) %>% 
+  mutate(over30 = ifelse(dep_delay>30, TRUE, FALSE)) %>% 
+  group_by(date) %>% 
+  summarise(prop=mean(over30)) %>% 
 
-delay <- flights %>% 
-  filter(dep_delay > 30) %>% 
-  tally() %>% 
-  rename(num_delay = n)
-delay
-
-delayedFlights <- flights %>% 
-  mutate(delayed = ifelse(dep_delay > 30, "yes", "no")) %>%
-  filter(!is.na(delayed)) %>%
-  group_by(date, delayed) %>%
-  tally()
-delayedFlights
-
-spreadFlights <- delayedFlights %>% 
-  spread(delayed, n) %>%
-  mutate(fraction = yes/(yes + no))
-spreadFlights
-
-ggplot(data = spreadFlights, aes(x = date, y = fraction)) + geom_line()
+ggplot(data =., aes(x = date, y = prop)) + geom_line() + 
+  xlab("Date") +
+  ylab("Proportion Delayed (> 30 mins)") +
+  ggtitle("Proportion of Flights Delayed Greater Than 30 Minutes")
 
 #seasonal delays
-  
 delayedFlights <- flights %>% 
-  mutate(delayed = ifelse(dep_delay > 30, "yes", "no")) %>%
-  filter(!is.na(delayed)) %>%
-  group_by(date, delayed) %>%
-  tally()
-delayedFlights
-
-spreadFlights <- delayedFlights %>% 
-  spread(delayed, n) %>%
-  mutate(fraction = yes/(yes + no))
-spreadFlights
-
-spreadFlights <- spreadFlights %>%
-  mutate(month = format(date, "%m")) %>%
-  mutate(season = ifelse(month == "12" | month == "01"| month == "02", "winter", ifelse(month == "03" | month == "04" | month == "05", "spring", ifelse(month == "06" | month == "07" | month == "08", "summer", ifelse(month == "09" | month == "10" | month == "11", "fall", "other")))))
-spreadFlights
-
-
-ggplot(data = spreadFlights, aes(x = date, y = fraction, col = season)) + geom_line()
+  filter(!is.na(dep_delay)) %>% 
+  mutate(over30 = ifelse(dep_delay>30, TRUE, FALSE)) %>% 
+  group_by(date) %>% 
+  summarise(prop=mean(over30)) %>% 
+  mutate(
+    month = format(date, "%m"),
+    season = ifelse(month == "12" | month == "01"| month == "02", "winter", 
+                ifelse(month == "03" | month == "04" | month == "05", "spring", 
+                    ifelse(month == "06" | month == "07" | month == "08", "summer", 
+                        ifelse(month == "09" | month == "10" | month == "11", "fall", "other")))))
+ggplot(data = delayedFlights, aes(x = date, y = prop, col = season)) + geom_point() +
+  geom_smooth(data = subset(delayedFlights, month < 12), se = FALSE) +
+  xlab("Date") +
+  ylab("Proportion Delayed (> 30 mins)") +
+  ggtitle("Seasonality of Delayed Flights")
 
 ```
 
-
-
-mutate(prop = num_delay/total_num) 
-ggplot(data=flights, aes(x=date, y=prop)) + geom_point()
 
 
 ## Question 2:
@@ -118,20 +101,28 @@ ggplot(data=flights, aes(x=date, y=prop)) + geom_point()
 Some people prefer flying on older planes.  Even though they aren't as nice,
 they tend to have more room.  Which airlines should these people favor?
 
+It seems that American Airlines would be the preferred airline carrier for these people, given that it most consistently flies airplanes that are older than 25 years. 
+
+Corrections: Created a boxplot instead of a point graph to show the distribution of ages of airplanes for each carrier. Also added the number of observations (number of flights) that the distribution represents.
+
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
 
-#I took an "old airplane" to mean that the year it was built was prior to 2000, as the average age of airplanes flown in the U.S. today is around 11 years old (http://www.cnn.com/2010/TRAVEL/02/01/planes.age.dreamliner/). 
+#find number of observations for each carrier 
+give.n <- function(carrier){
+  return(c(y = median(carrier)*3.0, label = length(carrier))) 
+}
+  
 airlinePlanes <- left_join(planes, flights, by = "plane") %>%
   select(plane, year, carrier) %>%
-  mutate(old = ifelse(year < 2000, "yes", "no")) %>%
-  group_by(carrier, old) %>%
-  filter(!is.na(old)) %>%
-  tally() %>%
-  spread(old, n) %>%
-  mutate(fraction = yes/(yes + no))
-airlinePlanes
-#Graph shows fraction of planes flown by each airline that were built prior to 2000. It seems that American Airlines would be the preferred airline carrier for these people.
-ggplot(data = airlinePlanes, aes(x = carrier, y = fraction)) + geom_point()
+  filter(!is.na(year)) %>%
+  group_by(carrier)
+
+#Graph shows average age of planes for each carrier.
+ggplot(data = airlinePlanes, aes(x = carrier, y = 2016-year)) + geom_boxplot() +
+  stat_summary(fun.data = give.n, geom = "text", fun.y = median) +
+  xlab("Airline Carrier(Abbrev)") +
+  ylab("Age of Planes") +
+  ggtitle("Age of Planes for Airline Carriers")
 
 ```
 
@@ -145,40 +136,49 @@ ggplot(data = airlinePlanes, aes(x = carrier, y = fraction)) + geom_point()
 For example, Southwest Airlines Flight 60 to Dallas consists of a single flight
 path, but since it flew 299 times in 2013, it would be counted as 299 flights.
 
+Southwest Airlines has a straong preference for flying to Texas, indicated by both the number of unique flight paths and the total number of flights that fly to Texas. The proportionalities for both flights and flight paths are very similar, with other Southern states such as Louisiana and Florida following closely behind Texas.
+
+Correction: Switched flights and flightpaths, so flights are the total number of airplanes that flew to each state, and flightpaths are the number of unique flights that are taken to each state by Southwest airlines. Changed the graph to a bar graph due to categorical x variable. Reordered the x-axis in ascending order. I believe it would make more sense in descending order, but could not figure out how to do this. 
+
 ```{r, echo=FALSE, message=FALSE, fig.width=12, fig.height=6}
 stateRegion <- right_join(airports, states, by = "state") %>%
   select(iata, state) 
-stateRegion
 
-#flight paths
-WNflightPath <- flights %>%
+#total number of flights to each state
+WNflight <- flights %>%
   filter(carrier == "WN") %>%
   group_by(flight, dest) %>%
   tally() %>%
   arrange(desc(n)) 
-WNflightPath
 
-flightPathStates <- left_join(WNflightPath, stateRegion, by = c("dest" = "iata")) %>%
+flightState <- left_join(WNflight, stateRegion, by = c("dest" = "iata")) %>%
   group_by(state) %>%
+  filter(!is.na(state)) %>%
   tally() %>%
   rename("freq" = nn) 
-flightPathStates
 
-#shows the number of flightpaths to each state
-ggplot(data = flightPathStates, aes(x = state, y = freq)) + geom_point()
 
-#number of flights
-WNflight <- flights %>%
-  filter(carrier == "WN") %>%
-  select(flight, dest) 
-WNflight
+ggplot(data = flightState, aes(x = reorder(state, freq), y = freq)) + geom_bar(stat = "identity") +
+  xlab("State") +
+  ylab("Number of Flights") +
+  ggtitle("Total Number of Flihgts to Each State")
 
-flightStates <- left_join(WNflight, stateRegion, by = c("dest" = "iata")) %>%
+#number of unique paths
+WNflightpath <- flights %>%
+  filter(carrier == "WN")
+
+flightPath <- left_join(WNflightpath, stateRegion, by = c("dest" = "iata")) %>%
+  select(flight, dest, state) %>%
+  filter(!is.na(state)) %>%
+  unique() %>%
   group_by(state) %>%
-  filter(!is.na(state))
-flightStates
+  tally() %>%
+  rename("Num_of_Flights" = n)
 
-ggplot(data = flightStates, aes(x = state)) + geom_bar()
+ggplot(data = flightPath, aes(x = reorder(state, Num_of_Flights), y = Num_of_Flights)) + geom_bar(stat = "identity") +
+  xlab("State") +
+  ylab("Number of Flight Paths") +
+  ggtitle("Unique Flight Paths to Each State")
 
 
 ```
@@ -193,32 +193,37 @@ I want to know proportionately what regions (NE, south, west, midwest) each
 carrier flies to/from Houston in the month of July.  Consider the `month()`
 function from the `lubridate` package.
 
+It seems that most carriers have flights to the South, and three airlines (AA, FL, and YV) fly exclusively to the south. The next most popular destination is the West, with two airlines (AS and F9) flying exclusively to the West. New England and the South are much less rare,which only a few airlines travelling to each. 
+
+Corrections: Split the destination distribution over carrier, and used a bar graph instead of a pie chart to represent the data more clearly. 
+
 ```{r, echo=FALSE, message=FALSE, fig.width=12, fig.height=6}
 
 HoustonFlights <- flights %>%
-  mutate(month = format(date, "%m")) %>%
-  filter (month == "07") %>%
-  group_by(dest) %>%
+  mutate(month = month(date)) %>%
+  filter(month == 7) %>%
+  group_by(dest, carrier) %>%
   tally() %>%
   rename(flight_freq = n)
-HoustonFlights
 
 stateRegion <- right_join(airports, states, by = "state")
-stateRegion
 
 airportRegion <- right_join(stateRegion, HoustonFlights,
                             by = c("iata" = "dest")) %>%
-  group_by(region) %>%
+  select(carrier, region, flight_freq) %>%
+  group_by(carrier, region) %>%
   summarise(flight_freq = sum(flight_freq)) %>%
   filter(!is.na(region)) %>%
-  mutate(fraction = flight_freq/sum(flight_freq))
-airportRegion
+  filter(!is.na(carrier)) %>%
+  mutate(fraction = flight_freq/sum(flight_freq)) %>%
+  arrange(desc(fraction))
 
-bar <- ggplot(data = airportRegion, aes(x ="", y = fraction, fill = region)) + geom_bar(stat = "identity")
-bar
+ggplot(data = airportRegion, aes(x = carrier,y = fraction, fill = region)) + geom_bar(stat = "identity") +
+  xlab("Airline Carrier") +
+  ylab("Fraction of Flight Paths") +
+  ggtitle("Proportionatly of Destination Regions for Each Airline Carrier")
 
-pie <- bar + coord_polar("y", start=0)
-pie
+
 ```
 
 
