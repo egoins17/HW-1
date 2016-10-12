@@ -16,6 +16,7 @@ library(dplyr)
 library(readr) 
 library(tidyr)
 library(lubridate)
+library(forcats)
 
 # Load data sets. Note this assumes this .Rmd files is in the same directory as
 # the .csv files.
@@ -36,9 +37,9 @@ states <- read_csv("data/states.csv")
 Please indicate
 
 * Who you collaborated with: Alden Cowap
-* Roughly how much time you spent on this HW so far: 9 hours
+* Roughly how much time you spent on this HW so far: 10 hours
 * The URL of the RPubs published URL [http://rpubs.com/egoins/HW1PreSubmission](https://www.nhl.com/).
-* What gave you the most trouble: figuring out how to do a trendline in the delay seasonality graph regarding the winter months
+* What gave you the most trouble: 
 * Any comments you have: thanks for the feedback!
 
 
@@ -70,9 +71,11 @@ flights %>%
   summarise(prop=mean(over30)) %>% 
 
 ggplot(data =., aes(x = date, y = prop)) + geom_line() + 
+  geom_smooth(se = FALSE) +
   xlab("Date") +
   ylab("Proportion Delayed (> 30 mins)") +
-  ggtitle("Proportion of Flights Delayed Greater Than 30 Minutes")
+  ggtitle("Proportion of Flights Delayed Greater Than 30 Minutes") +
+  coord_cartesian(ylim=c(0, 0.25))
 
 #seasonal delays
 delayedFlights <- flights %>% 
@@ -82,12 +85,13 @@ delayedFlights <- flights %>%
   summarise(prop=mean(over30)) %>% 
   mutate(
     month = format(date, "%m"),
-    season = ifelse(month == "12" | month == "01"| month == "02", "winter", 
-                ifelse(month == "03" | month == "04" | month == "05", "spring", 
-                    ifelse(month == "06" | month == "07" | month == "08", "summer", 
-                        ifelse(month == "09" | month == "10" | month == "11", "fall", "other")))))
+    season = ifelse(month == "01"| month == "02", "Winter 2010-2011", 
+                ifelse(month == "03" | month == "04" | month == "05", "Spring", 
+                    ifelse(month == "06" | month == "07" | month == "08", "Summer", 
+                        ifelse(month == "09" | month == "10" | month == "11", "Fall",
+                               ifelse(month == "12", "Winter 2011-2012", "other"))))))
 ggplot(data = delayedFlights, aes(x = date, y = prop, col = season)) + geom_point() +
-  geom_smooth(data = subset(delayedFlights, month < 12), se = FALSE) +
+  geom_smooth(data = subset(delayedFlights), se = FALSE, span = 2) +
   xlab("Date") +
   ylab("Proportion Delayed (> 30 mins)") +
   ggtitle("Seasonality of Delayed Flights")
@@ -108,21 +112,22 @@ Corrections: Created a boxplot instead of a point graph to show the distribution
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
 
 #find number of observations for each carrier 
-give.n <- function(carrier){
-  return(c(y = median(carrier)*3.0, label = length(carrier))) 
-}
   
 airlinePlanes <- left_join(planes, flights, by = "plane") %>%
   select(plane, year, carrier) %>%
   filter(!is.na(year)) %>%
   group_by(carrier)
 
+flights_counts <- airlinePlanes %>%
+  select(carrier) %>% 
+  count(carrier)
+
 #Graph shows average age of planes for each carrier.
 ggplot(data = airlinePlanes, aes(x = carrier, y = 2016-year)) + geom_boxplot() +
-  stat_summary(fun.data = give.n, geom = "text", fun.y = median) +
   xlab("Airline Carrier(Abbrev)") +
   ylab("Age of Planes") +
-  ggtitle("Age of Planes for Airline Carriers")
+  ggtitle("Age of Planes for Airline Carriers") +
+  geom_text(data=flights_counts, aes(x=carrier, y=0, label=n))
 
 ```
 
@@ -158,7 +163,7 @@ flightState <- left_join(WNflight, stateRegion, by = c("dest" = "iata")) %>%
   rename("freq" = nn) 
 
 
-ggplot(data = flightState, aes(x = reorder(state, freq), y = freq)) + geom_bar(stat = "identity") +
+ggplot(data = flightState, aes(x = fct_reorder(state, freq, .desc = TRUE), y = freq)) + geom_bar(stat = "identity") +
   xlab("State") +
   ylab("Number of Flights") +
   ggtitle("Total Number of Flihgts to Each State")
@@ -175,7 +180,7 @@ flightPath <- left_join(WNflightpath, stateRegion, by = c("dest" = "iata")) %>%
   tally() %>%
   rename("Num_of_Flights" = n)
 
-ggplot(data = flightPath, aes(x = reorder(state, Num_of_Flights), y = Num_of_Flights)) + geom_bar(stat = "identity") +
+ggplot(data = flightPath, aes(x = fct_reorder(state, Num_of_Flights, .desc=TRUE), y = Num_of_Flights)) + geom_bar(stat = "identity") +
   xlab("State") +
   ylab("Number of Flight Paths") +
   ggtitle("Unique Flight Paths to Each State")
